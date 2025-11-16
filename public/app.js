@@ -82,14 +82,17 @@ function setupPitRows() {
     }
 }
 
+// -------- Add new kart to a row --------
 function addNewKartToRow(rowIdx) {
     const row = pitSlots[rowIdx];
     const rowDiv = document.getElementById('pitContainer').children[rowIdx];
 
+    if(row.length === 0) return;
+
     // Remove first kart from array and DOM
     const removed = row.shift();
     removed.div.remove();
-    // Remove buttons container that immediately follows the removed div
+    // Remove buttons container immediately following removed div
     const firstBtnContainer = rowDiv.querySelector('div');
     if (firstBtnContainer) firstBtnContainer.remove();
 
@@ -115,7 +118,12 @@ function addNewKartToRow(rowIdx) {
 
     // Insert new kart and buttons before the + button
     const plusBtn = rowDiv.querySelector('button:last-child');
-    rowDiv.insertBefore(newSlot.div, plusBtn
+    rowDiv.insertBefore(newSlot.div, plusBtn);
+    rowDiv.insertBefore(newBtnContainer, plusBtn);
+
+    // Add new slot to array
+    row.push(newSlot);
+}
 
 // -------- Manual color change --------
 function manualColorChange(rowIdx, slotIdx) {
@@ -140,5 +148,5 @@ function manualNumberChange(rowIdx, slotIdx) {
 // -------- Start tracker placeholder --------
 function startTracker() {
     const link = document.getElementById('apexLink').value;
-    alert("Tracker started! (future: fetch lap data from: " + link + ")");
+    alert("Tracker started! (for testing: no Apex Timing data connected, new karts will be blue)");
 }
