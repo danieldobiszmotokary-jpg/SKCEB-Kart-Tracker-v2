@@ -82,43 +82,40 @@ function setupPitRows() {
     }
 }
 
-// -------- Add new kart to a row --------
 function addNewKartToRow(rowIdx) {
     const row = pitSlots[rowIdx];
+    const rowDiv = document.getElementById('pitContainer').children[rowIdx];
 
-    // Remove first kart immediately
+    // Remove first kart from array and DOM
     const removed = row.shift();
     removed.div.remove();
+    // Remove buttons container that immediately follows the removed div
+    const firstBtnContainer = rowDiv.querySelector('div');
+    if (firstBtnContainer) firstBtnContainer.remove();
 
-    // Remove associated buttons
-    const rowDiv = document.getElementById('pitContainer').children[rowIdx];
-    const firstBtns = rowDiv.querySelectorAll('div')[0];
-    if(firstBtns) firstBtns.remove();
-
-    // Prompt for new kart number
-    const newNumber = prompt("Enter incoming kart number:");
+    // Simulate new kart (blue) if no data
+    const newNumber = "?"; // unknown kart
     const newSlot = createKartSlot(newNumber, "", "blue");
 
     // Add manual buttons under the new kart
     const colorBtn = document.createElement('button');
     colorBtn.textContent = "Color";
     colorBtn.onclick = () => manualColorChange(rowIdx, row.length);
+
     const numberBtn = document.createElement('button');
     numberBtn.textContent = "Number";
     numberBtn.onclick = () => manualNumberChange(rowIdx, row.length);
 
-    const btnContainer = document.createElement('div');
-    btnContainer.style.display = 'flex';
-    btnContainer.style.justifyContent = 'center';
-    btnContainer.style.gap = '4px';
-    btnContainer.appendChild(colorBtn);
-    btnContainer.appendChild(numberBtn);
+    const newBtnContainer = document.createElement('div');
+    newBtnContainer.style.display = 'flex';
+    newBtnContainer.style.justifyContent = 'center';
+    newBtnContainer.style.gap = '4px';
+    newBtnContainer.appendChild(colorBtn);
+    newBtnContainer.appendChild(numberBtn);
 
-    rowDiv.insertBefore(newSlot.div, rowDiv.querySelector('button'));
-    rowDiv.insertBefore(btnContainer, rowDiv.querySelector('button'));
-
-    row.push(newSlot);
-}
+    // Insert new kart and buttons before the + button
+    const plusBtn = rowDiv.querySelector('button:last-child');
+    rowDiv.insertBefore(newSlot.div, plusBtn
 
 // -------- Manual color change --------
 function manualColorChange(rowIdx, slotIdx) {
