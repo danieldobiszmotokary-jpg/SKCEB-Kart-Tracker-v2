@@ -1,15 +1,22 @@
-// Simulated scores (normally fetched from Apex Timing)
-let kartScores = {}; // kartNumber -> score
-let teamScores = {}; // teamId -> { totalScore, laps }
-let pitSlots = [];   // pitSlots[row][slot] = { teamId, kartNumber, score, color, manualOverride, div }
+// ==========================
+// SKCEB Kart Tracker v3
+// Complete multi-stint tracker + pit visualization
+// ==========================
 
-// Color helpers
+// Example: kartScores[kartNumber] = latest score
+let kartScores = {}; 
+// teamScores[teamId] = { totalScore, laps }
+let teamScores = {}; 
+// pitSlots[row][slot] = { teamId, kartNumber, score, color, manualOverride, div }
+let pitSlots = [];
+
+// ---------- Color Helpers ----------
 function getColorFromScore(score) {
-    if(score === undefined) return "blue";
-    if(score >= 900) return "purple";
-    if(score >= 750) return "green";
-    if(score >= 600) return "yellow";
-    if(score >= 500) return "orange";
+    if(score===undefined) return "blue";
+    if(score>=900) return "purple";
+    if(score>=750) return "green";
+    if(score>=600) return "yellow";
+    if(score>=500) return "orange";
     return "red";
 }
 
@@ -19,8 +26,8 @@ function getColorFromTeam(teamId) {
     return getColorFromScore(avg);
 }
 
-// Setup pit rows
-function setupPitRows() {
+// ---------- Setup Pit Rows ----------
+function setupPitRows(){
     const container = document.getElementById('pitContainer');
     container.innerHTML = '';
     pitSlots = [];
@@ -55,7 +62,7 @@ function setupPitRows() {
     }
 }
 
-// Manual color override
+// ---------- Manual Color Override ----------
 function manualColorOverride(rowIdx, slotIdx){
     const colors = ["blue","red","orange","yellow","green","purple"];
     const newColor = prompt("Enter color (blue, red, orange, yellow, green, purple):", pitSlots[rowIdx][slotIdx].color);
@@ -66,13 +73,15 @@ function manualColorOverride(rowIdx, slotIdx){
     }
 }
 
-// Shift row (+ button)
+// ---------- Shift Row (+ button) ----------
 function shiftRow(rowIdx){
     const row = pitSlots[rowIdx];
-    row.shift();
+    row.shift(); // remove first kart
+
     const newKartNumber = prompt("Enter incoming kart number:");
     const newSlot = { teamId:"", kartNumber:newKartNumber, score:null, color:"blue", manualOverride:false };
 
+    // Automatic color from score if tracked
     if(kartScores[newKartNumber]!==undefined){
         newSlot.score = kartScores[newKartNumber];
         newSlot.color = getColorFromScore(newSlot.score);
@@ -91,9 +100,9 @@ function shiftRow(rowIdx){
     rowDiv.insertBefore(kartDiv,rowDiv.querySelector('button'));
 }
 
-// Start tracker placeholder
+// ---------- Start Tracker Placeholder ----------
 function startTracker(){
     const link = document.getElementById('apexLink').value;
-    alert("Tracker started! (In the future, this will fetch lap data from: " + link + ")");
-    // Here you can integrate live Apex Timing data to update kartScores dynamically
+    alert("Tracker started! (future: fetch lap data from: " + link + ")");
+    // Later: integrate live timing, update kartScores, teamScores
 }
