@@ -1,4 +1,29 @@
-body { font-family: Arial, sans-serif; padding: 20px; }
-.row { display: flex; gap: 8px; margin-bottom: 10px; align-items: flex-end; }
-.kart { width: 60px; height: 60px; display:flex; align-items:center; justify-content:center; color:white; font-weight:bold; border-radius:5px; cursor:pointer; }
-button { padding: 5px 10px; margin-left:5px; }
+body { 
+    font-family: Arial, sans-serif; 
+    padding: 20px; 
+}
+
+.row {
+    display: flex;
+    flex-direction: column; /* karts stacked vertically */
+    gap: 8px;
+    margin-right: 20px; /* space between rows */
+    float: left; /* rows horizontal */
+}
+
+.kart { 
+    width: 60px; 
+    height: 60px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    color: white; 
+    font-weight: bold; 
+    border-radius: 5px; 
+    cursor: pointer; 
+}
+
+button { 
+    padding: 5px 10px; 
+    margin-left: 5px; 
+}
