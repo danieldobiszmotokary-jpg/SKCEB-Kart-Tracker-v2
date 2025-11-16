@@ -1,8 +1,3 @@
-// --------------------------
-// SKCEB Kart Tracker Final
-// Multi-stint tracker + pit visualization
-// --------------------------
-
 let kartScores = {};   // kartNumber -> score
 let teamScores = {};   // teamId -> { totalScore, laps }
 let pitSlots = [];     // pitSlots[row][slot] = { teamId, kartNumber, score, color, manualOverride, div }
@@ -23,8 +18,24 @@ function getColorFromTeam(teamId){
     return getColorFromScore(avg);
 }
 
+// -------- Create a kart slot --------
+function createKartSlot(kartNumber, teamId, color) {
+    const kartDiv = document.createElement('div');
+    kartDiv.className = 'kart';
+    kartDiv.textContent = kartNumber || "?";
+    kartDiv.style.background = color;
+
+    return {
+        kartNumber: kartNumber,
+        teamId: teamId,
+        color: color,
+        manualOverride: false,
+        div: kartDiv
+    };
+}
+
 // -------- Setup pit rows --------
-function setupPitRows(){
+function setupPitRows() {
     const container = document.getElementById('pitContainer');
     container.innerHTML = '';
     pitSlots = [];
@@ -32,26 +43,38 @@ function setupPitRows(){
     const numRows = parseInt(document.getElementById('numRows').value);
     const kartsPerRow = parseInt(document.getElementById('kartsPerRow').value);
 
-    for(let r=0;r<numRows;r++){
+    for (let r = 0; r < numRows; r++) {
         const rowDiv = document.createElement('div');
-        rowDiv.className='row';
-        let row=[];
+        rowDiv.className = 'row';
+        let row = [];
 
-        for(let k=0;k<kartsPerRow;k++){
-            const slot={teamId:"", kartNumber:"", score:null, color:"blue", manualOverride:false};
-            const kartDiv=document.createElement('div');
-            kartDiv.className='kart';
-            kartDiv.textContent = slot.kartNumber || "?";
-            kartDiv.style.background=slot.color;
-            kartDiv.onclick=()=>manualColorOverride(r,k);
-            slot.div=kartDiv;
+        for (let k = 0; k < kartsPerRow; k++) {
+            const slot = createKartSlot("", "", "blue");
             row.push(slot);
-            rowDiv.appendChild(kartDiv);
+            rowDiv.appendChild(slot.div);
+
+            // Add manual buttons under each kart
+            const colorBtn = document.createElement('button');
+            colorBtn.textContent = "Color";
+            colorBtn.onclick = () => manualColorChange(r, k);
+            const numberBtn = document.createElement('button');
+            numberBtn.textContent = "Number";
+            numberBtn.onclick = () => manualNumberChange(r, k);
+
+            const btnContainer = document.createElement('div');
+            btnContainer.style.display = 'flex';
+            btnContainer.style.justifyContent = 'center';
+            btnContainer.style.gap = '4px';
+            btnContainer.appendChild(colorBtn);
+            btnContainer.appendChild(numberBtn);
+
+            rowDiv.appendChild(btnContainer);
         }
 
-        const plusBtn=document.createElement('button');
-        plusBtn.textContent='+';
-        plusBtn.onclick=()=>shiftRow(r);
+        // + button for row
+        const plusBtn = document.createElement('button');
+        plusBtn.textContent = '+';
+        plusBtn.onclick = () => addNewKartToRow(r);
         rowDiv.appendChild(plusBtn);
 
         container.appendChild(rowDiv);
@@ -59,46 +82,66 @@ function setupPitRows(){
     }
 }
 
-// -------- Manual color override --------
-function manualColorOverride(rowIdx, slotIdx){
-    const colors=["blue","red","orange","yellow","green","purple"];
-    const newColor=prompt("Enter color (blue, red, orange, yellow, green, purple):", pitSlots[rowIdx][slotIdx].color);
-    if(colors.includes(newColor)){
-        pitSlots[rowIdx][slotIdx].color=newColor;
-        pitSlots[rowIdx][slotIdx].manualOverride=true;
-        pitSlots[rowIdx][slotIdx].div.style.background=newColor;
+// -------- Add new kart to a row --------
+function addNewKartToRow(rowIdx) {
+    const row = pitSlots[rowIdx];
+
+    // Remove first kart immediately
+    const removed = row.shift();
+    removed.div.remove();
+
+    // Remove associated buttons
+    const rowDiv = document.getElementById('pitContainer').children[rowIdx];
+    const firstBtns = rowDiv.querySelectorAll('div')[0];
+    if(firstBtns) firstBtns.remove();
+
+    // Prompt for new kart number
+    const newNumber = prompt("Enter incoming kart number:");
+    const newSlot = createKartSlot(newNumber, "", "blue");
+
+    // Add manual buttons under the new kart
+    const colorBtn = document.createElement('button');
+    colorBtn.textContent = "Color";
+    colorBtn.onclick = () => manualColorChange(rowIdx, row.length);
+    const numberBtn = document.createElement('button');
+    numberBtn.textContent = "Number";
+    numberBtn.onclick = () => manualNumberChange(rowIdx, row.length);
+
+    const btnContainer = document.createElement('div');
+    btnContainer.style.display = 'flex';
+    btnContainer.style.justifyContent = 'center';
+    btnContainer.style.gap = '4px';
+    btnContainer.appendChild(colorBtn);
+    btnContainer.appendChild(numberBtn);
+
+    rowDiv.insertBefore(newSlot.div, rowDiv.querySelector('button'));
+    rowDiv.insertBefore(btnContainer, rowDiv.querySelector('button'));
+
+    row.push(newSlot);
+}
+
+// -------- Manual color change --------
+function manualColorChange(rowIdx, slotIdx) {
+    const colors = ["blue","red","orange","yellow","green","purple"];
+    const newColor = prompt("Enter color (blue, red, orange, yellow, green, purple):", pitSlots[rowIdx][slotIdx].color);
+    if (colors.includes(newColor)) {
+        pitSlots[rowIdx][slotIdx].color = newColor;
+        pitSlots[rowIdx][slotIdx].manualOverride = true;
+        pitSlots[rowIdx][slotIdx].div.style.background = newColor;
     }
 }
 
-// -------- Shift row (+ button) --------
-function shiftRow(rowIdx){
-    const row=pitSlots[rowIdx];
-    row.shift(); // remove first kart
-
-    const newKartNumber=prompt("Enter incoming kart number:");
-    const newSlot={teamId:"", kartNumber:newKartNumber, score:null, color:"blue", manualOverride:false};
-
-    if(kartScores[newKartNumber]!==undefined){
-        newSlot.score=kartScores[newKartNumber];
-        newSlot.color=getColorFromScore(newSlot.score);
+// -------- Manual number change --------
+function manualNumberChange(rowIdx, slotIdx) {
+    const newNumber = prompt("Enter kart number:", pitSlots[rowIdx][slotIdx].kartNumber);
+    if (newNumber !== null) {
+        pitSlots[rowIdx][slotIdx].kartNumber = newNumber;
+        pitSlots[rowIdx][slotIdx].div.textContent = newNumber;
     }
-
-    const kartDiv=document.createElement('div');
-    kartDiv.className='kart';
-    kartDiv.textContent=newSlot.kartNumber || "?";
-    kartDiv.style.background=newSlot.color;
-    kartDiv.onclick=()=>manualColorOverride(rowIdx,row.length);
-
-    newSlot.div=kartDiv;
-    row.push(newSlot);
-
-    const rowDiv=row[0].div.parentElement;
-    rowDiv.insertBefore(kartDiv,rowDiv.querySelector('button'));
 }
 
 // -------- Start tracker placeholder --------
-function startTracker(){
-    const link=document.getElementById('apexLink').value;
-    alert("Tracker started! (future: fetch lap data from: "+link+")");
-    // Integrate multi-stint scoring from Apex Timing here
+function startTracker() {
+    const link = document.getElementById('apexLink').value;
+    alert("Tracker started! (future: fetch lap data from: " + link + ")");
 }
