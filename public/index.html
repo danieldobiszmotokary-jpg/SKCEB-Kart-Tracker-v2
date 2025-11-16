@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>SKCEB Kart Tracker v2</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<h1>SKCEB Kart Tracker v2</h1>
+
+<!-- Tracker input -->
+<div id="trackerControls">
+  Apex Timing URL: <input type="text" id="apexLink" placeholder="Paste link here">
+  <button onclick="startTracker()">Start Tracker</button>
+</div>
+
+<hr>
+
+<!-- Pit visualization controls -->
+<h2>Pit Visualization</h2>
+<div>
+  Rows: <input type="number" id="numRows" value="3" min="1" max="10">
+  Karts per row: <input type="number" id="kartsPerRow" value="3" min="1" max="10">
+  <button onclick="setupPitRows()">Set Up Pit Rows</button>
+</div>
+<div id="pitContainer"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
