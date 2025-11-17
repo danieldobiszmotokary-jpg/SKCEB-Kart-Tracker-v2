@@ -1,8 +1,24 @@
 const express = require('express');
+const fetch = require('node-fetch');
 const path = require('path');
 const app = express();
+const PORT = process.env.PORT || 3000;
 
 app.use(express.static(path.join(__dirname, 'public')));
 
-const PORT = process.env.PORT || 3000;
+// Simple proxy to fetch Apex Timing (avoid CORS)
+app.get('/proxy', async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send('missing url');
+  try {
+    const response = await fetch(url, { timeout: 15000 });
+    const text = await response.text();
+    res.set('Content-Type', 'text/html');
+    res.send(text);
+  } catch (err) {
+    console.error('proxy err', err && err.message);
+    res.status(500).send('fetch error');
+  }
+});
+
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
