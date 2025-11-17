@@ -1,40 +1,28 @@
+// Simple Node + Express server with a proxy endpoint to fetch Apex webpages.
+// This avoids CORS issues when client-side JS fetches third-party Apex pages.
+
 const express = require('express');
 const axios = require('axios');
-const cheerio = require('cheerio');
+const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-app.use(express.static('public'));
+app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json());
 
-// Fetch and parse Apex Timing data
-app.post('/fetch-laps', async (req, res) => {
-    try {
-        const { url } = req.body;
-        const response = await axios.get(url);
-        const html = response.data;
-        const $ = cheerio.load(html);
-
-        let kartData = [];
-
-        $('tr').each((i, el) => {
-            const tds = $(el).find('td');
-            if (tds.length >= 3) {
-                const number = $(tds[0]).text().trim();
-                const transponder = $(tds[1]).text().trim();
-                const lapTime = parseFloat($(tds[2]).text().trim());
-                if (!isNaN(lapTime)) {
-                    kartData.push({ number, transponder, lapTime });
-                }
-            }
-        });
-
-        res.json({ success: true, kartData });
-    } catch (error) {
-        console.error(error);
-        res.json({ success: false, error: 'Failed to fetch Apex Timing data' });
-    }
+// Proxy fetch endpoint: client POSTs { url: "https://..." }
+app.post('/proxy-fetch', async (req, res) => {
+  try {
+    const url = req.body && req.body.url;
+    if (!url) return res.status(400).json({ success: false, error: 'missing url' });
+    const resp = await axios.get(url, { timeout: 15000, headers: { 'User-Agent': 'Mozilla/5.0' } });
+    return res.json({ success: true, html: resp.data });
+  } catch (err) {
+    console.error('proxy-fetch error', err && err.message);
+    return res.status(500).json({ success: false, error: 'fetch failed' });
+  }
 });
 
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+app.listen(PORT, () => console.log(`Server listening on port ${PORT}`));
+
