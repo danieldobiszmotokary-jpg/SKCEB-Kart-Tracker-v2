@@ -1,81 +1,66 @@
-body {
-    font-family: Arial, sans-serif;
-    margin: 0;
-    padding: 0;
+:root{
+  --bg: #f6f8fb;
+  --card: #fff;
+  --muted:#666;
+  --accent:#1976d2;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  background:var(--bg);
+  font-family:Inter,Arial,Helvetica,sans-serif;
+  color:#111;
+}
+header{padding:12px 18px;background:var(--card);box-shadow:0 1px 3px rgba(0,0,0,0.06)}
+h1{margin:0;font-size:20px}
+main{padding:14px}
+.controls{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 1px 6px rgba(0,0,0,0.04);margin-bottom:12px}
+.controls .row{display:flex;gap:8px;align-items:center;margin-bottom:8px;flex-wrap:wrap}
+.controls input[type="text"], .controls input[type="number"]{padding:8px;border-radius:6px;border:1px solid #ddd}
+.controls button{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
+
+/* layout */
+.layout{display:flex;gap:12px;align-items:flex-start}
+.pit{flex:1 1 60%;background:var(--card);padding:12px;border-radius:8px}
+.sidebar{flex:0 0 300px;display:flex;flex-direction:column;gap:12px}
+.scores, .teams{background:var(--card);padding:12px;border-radius:8px;min-height:120px}
+
+/* pit container */
+.pit-container{display:flex;gap:12px;flex-wrap:wrap}
+.pit-column{display:flex;flex-direction:column;gap:8px;background:linear-gradient(180deg,#ffffff,#f7fbff);padding:8px;border-radius:8px;min-width:120px;align-items:center;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+.kart-box{
+  width:120px;
+  min-height:90px;
+  border-radius:10px;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+  color:#fff;
+  font-weight:700;
+  padding:8px;
+  box-shadow:0 2px 6px rgba(0,0,0,0.08);
 }
 
-.container {
-    padding: 20px;
-}
+/* colors */
+.kart-blue{background:#3498db}
+.kart-purple{background:#9b59b6}
+.kart-green{background:#2ecc71}
+.kart-yellow{background:#f1c40f;color:#111}
+.kart-orange{background:#e67e22}
+.kart-red{background:#e74c3c}
 
-.input-section {
-    margin-bottom: 20px;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px;
-}
+/* controls inside kart */
+.kart-controls{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;justify-content:center}
+.kart-controls input, .kart-controls select, .kart-controls button{font-size:12px;padding:6px;border-radius:6px;border:1px solid #ddd}
 
-.input-section input {
-    flex: 1 1 60%;
-    padding: 10px;
-    font-size: 16px;
-}
+/* plus button under a column */
+.add-btn{margin-top:6px;background:#1976d2;color:white;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
 
-.input-section button {
-    padding: 10px 20px;
-    font-size: 16px;
+/* responsive */
+@media (max-width:800px){
+  .layout{flex-direction:column}
+  .sidebar{flex-basis:auto}
+  .kart-box{width:110px}
 }
-
-.main-section {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 20px;
-}
-
-.pit-visualization, .kart-scores, .race-tracking {
-    border: 1px solid #ccc;
-    padding: 10px;
-    flex: 1 1 300px;
-    min-height: 300px;
-}
-
-.pit-row {
-    display: flex;
-    align-items: center;
-    margin-bottom: 10px;
-    overflow-x: auto;
-}
-
-.kart-box {
-    min-width: 70px;
-    min-height: 70px;
-    margin-right: 5px;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: white;
-    font-weight: bold;
-    border-radius: 5px;
-    position: relative;
-    padding: 5px;
-}
-
-.kart-box input, .kart-box select {
-    width: 60px;
-    font-size: 12px;
-    margin-top: 3px;
-}
-
-.kart-box.blue { background-color: #3498db; }
-.kart-box.purple { background-color: #9b59b6; }
-.kart-box.green { background-color: #2ecc71; }
-.kart-box.yellow { background-color: #f1c40f; color: black; }
-.kart-box.orange { background-color: #e67e22; }
-.kart-box.red { background-color: #e74c3c; }
-
-.kart-box span.manual {
-    position: absolute;
-    bottom: 0;
-    font-size: 10px;
-}
+.status{margin-top:6px;color:var(--muted)}
