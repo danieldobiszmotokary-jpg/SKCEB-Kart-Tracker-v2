@@ -8,7 +8,7 @@ const PORT = process.env.PORT || 3000;
 app.use(express.static('public'));
 app.use(express.json());
 
-// Endpoint to fetch and parse Apex Timing link
+// Fetch and parse Apex Timing data
 app.post('/fetch-laps', async (req, res) => {
     try {
         const { url } = req.body;
@@ -18,7 +18,6 @@ app.post('/fetch-laps', async (req, res) => {
 
         let kartData = [];
 
-        // Universal parser: finds tables or divs with lap times
         $('tr').each((i, el) => {
             const tds = $(el).find('td');
             if (tds.length >= 3) {
