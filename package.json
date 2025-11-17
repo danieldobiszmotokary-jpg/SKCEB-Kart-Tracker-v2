@@ -1,5 +1,5 @@
 {
-  "name": "skceb-kart-performance",
+  "name": "skceb-kart-tracker-final",
   "version": "1.0.0",
   "description": "Kart performance tracker with pit visualization",
   "main": "server.js",
