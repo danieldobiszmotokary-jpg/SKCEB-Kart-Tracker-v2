@@ -1,29 +1,69 @@
-body { 
-    font-family: Arial, sans-serif; 
-    padding: 20px; 
+:root {
+  --bg: #f7f9fb;
+  --card: #fff;
+  --muted: #666;
 }
+body{
+  font-family: Inter, Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  margin: 0;
+  padding: 18px;
+  color: #111;
+}
+h1 { margin: 0 0 12px 0; font-size: 20px; }
+.controls { display:flex; gap:16px; align-items:center; margin-bottom:8px; flex-wrap:wrap; }
+#status { margin:8px 0 14px 0; color:var(--muted) }
+.pit-container { margin-top:12px; min-height:120px; clear:both; }
 
+/* Row displayed horizontally with karts stacked vertically */
 .row {
-    display: flex;
-    flex-direction: column; /* karts stacked vertically */
-    gap: 8px;
-    margin-right: 20px; /* space between rows */
-    float: left; /* rows horizontal */
+  display:flex;
+  flex-direction: column; /* karts stacked vertically */
+  gap:8px;
+  margin-right:18px; /* space between rows */
+  float:left;
+  align-items:center;
+  padding:8px;
+  background:rgba(255,255,255,0.6);
+  border-radius:6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
 }
 
-.kart { 
-    width: 60px; 
-    height: 60px; 
-    display: flex; 
-    align-items: center; 
-    justify-content: center; 
-    color: white; 
-    font-weight: bold; 
-    border-radius: 5px; 
-    cursor: pointer; 
+/* kart square */
+.kart{
+  width:64px;
+  height:64px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color:white;
+  font-weight:700;
+  border-radius:6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+  user-select:none;
 }
 
-button { 
-    padding: 5px 10px; 
-    margin-left: 5px; 
+/* Buttons */
+button{
+  background:#1976d2;
+  color:white;
+  border:0;
+  border-radius:6px;
+  padding:6px 10px;
+  cursor:pointer;
+  font-weight:600;
+}
+button:disabled{opacity:0.5;cursor:default}
+.row button{ background:#2e7d32; padding:6px 8px; font-size:14px; }
+
+/* small button container under each kart */
+.kart-btns{ display:flex; gap:6px; margin-top:4px; }
+.kart-btns button{ background:#555; padding:6px 8px; font-size:13px; }
+.kart-btns button.color-btn{ background:#1976d2; }
+.kart-btns button.num-btn{ background:#6a1b9a; }
+
+/* responsive */
+@media (max-width:720px){
+  .row{ margin-right:10px; padding:6px; }
+  .kart{ width:52px; height:52px; font-size:13px; }
 }
