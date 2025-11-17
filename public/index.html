@@ -1,33 +1,54 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>SKCEB Kart Tracker Final</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>SKCEB Kart Tracker — Final</title>
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 
-<h1>SKCEB Kart Tracker Final</h1>
+<h1>SKCEB Kart Tracker — Final</h1>
 
-<!-- Apex Timing input -->
-<div>
-  Apex Timing URL: <input type="text" id="apexLink" placeholder="Paste link here">
-  <button onclick="startTracker()">Start Tracker</button>
-</div>
+<section class="controls">
+  <div>
+    Apex Timing URL:
+    <input id="apexUrl" type="text" placeholder="Paste Apex Timing live link (example: https://www.apex-timing.com/live-timing/...)">
+    <button id="startBtn">Start</button>
+    <button id="stopBtn" disabled>Stop</button>
+  </div>
+
+  <div>
+    Poll interval (s):
+    <input id="pollSec" type="number" value="4" min="2" style="width:64px">
+    <label><input id="autoPitMap" type="checkbox" checked> Auto-map incoming kart to team prompt</label>
+  </div>
+</section>
+
+<div id="status">Idle</div>
 
 <hr>
 
-<!-- Pit visualization -->
-<h2>Pit Visualization</h2>
-<div>
-  Rows: <input type="number" id="numRows" value="3" min="1" max="10">
-  Karts per row: <input type="number" id="kartsPerRow" value="3" min="1" max="10">
-  <button onclick="setupPitRows()">Set Up Pit Rows</button>
-</div>
-<div id="pitContainer"></div>
+<section>
+  <h2>Pit Visualization</h2>
+  Rows: <input id="numRows" type="number" value="3" min="1" max="10">
+  Karts per row: <input id="kartsPerRow" type="number" value="3" min="1" max="10">
+  <button id="setupBtn">Set Up Pit Rows</button>
+</section>
+
+<div id="pitContainer" class="pit-container"></div>
+
+<hr>
+
+<section>
+  <h2>Debug & Controls</h2>
+  <button id="exportBtn">Export slot mapping (console)</button>
+  <button id="resetSlotsBtn">Reset slots (clear)</button>
+  <div style="margin-top:8px;color:#555;font-size:13px">
+    Notes: manual color overrides prevent automatic color changes for that slot. Blue = unknown. To integrate deeper with your event, you can tweak parser selectors in app.js.
+  </div>
+</section>
 
 <script src="app.js"></script>
 </body>
 </html>
-
-
