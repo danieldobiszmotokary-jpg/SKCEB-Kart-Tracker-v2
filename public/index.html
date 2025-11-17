@@ -1,42 +1,61 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Kart Pit Tracker</title>
-<link rel="stylesheet" href="styles.css">
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Kart Performance System</title>
+    <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-<div class="container">
-    <h1>Kart Pit & Performance Tracker</h1>
-    <div class="input-section">
-        <input type="text" id="apex-link" placeholder="Paste Apex Timing link here">
-        <button id="fetch-btn">Fetch Data</button>
-    </div>
 
-    <div class="main-section">
-        <div class="pit-visualization">
-            <h2>Pit Rows</h2>
-            <div id="pit-rows"></div>
-        </div>
-        <div class="kart-scores">
-            <h2>Kart Scores</h2>
-            <div id="kart-scores-list"></div>
-        </div>
-        <div class="race-tracking">
-            <h2>Race Tracking</h2>
-            <div id="race-tracking-list"></div>
-        </div>
-    </div>
+    <h1>Kart Performance Tracking</h1>
 
-    <div class="manual-controls">
-        <h2>Manual Controls</h2>
-        <button id="reset-colors-btn">Reset Colors to Scoring</button>
-        <button id="export-btn">Export Pit Mapping</button>
-    </div>
-    <button onclick="simulateApexFetch()">TEST MODE</button>
-</div>
-<script src="app.js"></script>
+    <!-- ===============================
+         APEX URL & CONTROLS
+    ================================ -->
+    <section id="controls">
+        <h2>Data Controls</h2>
+
+        <input 
+            id="apexUrlInput"
+            type="text"
+            placeholder="Paste Apex Timing Live Page URL here"
+        >
+
+        <button onclick="fetchApexData()">Fetch LIVE Apex Data</button>
+        <button onclick="simulateApexFetch()">Test Mode (Dummy Data)</button>
+        <button onclick="exportData()">Export Data</button>
+    </section>
+
+
+    <!-- ===============================
+         PIT VISUALIZATION
+    ================================ -->
+    <section id="pitSection">
+        <h2>Pit Lane Visualization</h2>
+        <div id="pitContainer"></div>
+    </section>
+
+
+    <!-- ===============================
+         KART SCORES
+    ================================ -->
+    <section id="scoreSection">
+        <h2>Kart Scores</h2>
+        <div id="kartScoreList"></div>
+    </section>
+
+
+    <!-- ===============================
+         RACE TRACKING
+    ================================ -->
+    <section id="trackSection">
+        <h2>Race Tracking</h2>
+        <div id="raceTracking"></div>
+    </section>
+
+
+    <!-- SCRIPT -->
+    <script src="app.js"></script>
 </body>
 </html>
-
