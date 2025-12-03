@@ -1,14 +1,13 @@
 {
-  "name": "skceb-kart-tracker-final",
+  "name": "skceb-kart-final",
   "version": "1.0.0",
-  "description": "Kart performance tracker with pit visualization",
+  "description": "Final SKCEB Kart Tracker - full implementation",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "axios": "^1.6.4",
-    "cheerio": "^1.0.0-rc.12"
+    "axios": "^1.6.4"
   }
 }
