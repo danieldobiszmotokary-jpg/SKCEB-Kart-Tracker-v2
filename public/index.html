@@ -1,65 +1,69 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>SKCEB Kart Tracker — Final</title>
-  <link rel="stylesheet" href="styles.css" />
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>SKCEB Kart Tracker — Final</title>
+<link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
-  <header>
-    <h1>SKCEB Kart Tracker</h1>
-  </header>
+  <header><h1>SKCEB Kart Tracker</h1></header>
 
   <main>
-    <section class="controls">
+    <section class="controls card">
       <div class="row">
         <label>Apex Timing URL</label>
-        <input id="apexUrl" placeholder="Paste Apex Timing live page link here" />
+        <input id="apexUrl" placeholder="Paste Apex Timing live page link here"/>
         <label>Poll (s)</label>
-        <input id="pollSeconds" type="number" min="2" value="5" style="width:70px" />
-      </div>
-
-      <div class="row">
-        <button id="startBtn">Start Polling</button>
+        <input id="pollSeconds" type="number" min="2" value="5" style="width:80px"/>
+        <button id="startBtn">Start</button>
         <button id="stopBtn" disabled>Stop</button>
-        <button id="testBtn">TEST MODE (dummy)</button>
-        <button id="exportBtn">Export JSON</button>
+        <button id="fetchOnceBtn">Fetch Once</button>
       </div>
 
       <div class="row">
         <label>Rows</label>
-        <input id="numRows" type="number" min="1" value="3" style="width:70px" />
-        <label>Karts per row</label>
-        <input id="kartsPerRow" type="number" min="1" value="3" style="width:70px" />
+        <input id="numRows" type="number" min="1" value="3" style="width:70px"/>
+        <label>Slots/row</label>
+        <input id="kartsPerRow" type="number" min="1" value="3" style="width:70px"/>
         <button id="setupBtn">Set Up Pit Rows</button>
+      </div>
+
+      <div class="row">
+        <button id="exportBtn">Export JSON</button>
+        <button id="resetColorsBtn">Reset All Colors to Auto</button>
       </div>
 
       <div id="status" class="status">Idle</div>
     </section>
 
     <section class="layout">
-      <section class="pit" id="pitSection">
+      <section class="left card">
+        <h2>Live Timing</h2>
+        <div id="liveTable" class="live-table">No data yet</div>
+      </section>
+
+      <section class="center card">
         <h2>Pit Visualization</h2>
         <div id="pitContainer" class="pit-container"></div>
       </section>
 
-      <aside class="sidebar">
-        <section class="scores">
+      <aside class="right">
+        <section class="card">
           <h3>Kart Scores</h3>
           <div id="kartScoresList"></div>
         </section>
-
-        <section class="teams">
-          <h3>Race Tracking (Teams)</h3>
+        <section class="card">
+          <h3>Teams</h3>
           <div id="teamList"></div>
         </section>
       </aside>
     </section>
 
-    <section class="notes">
-      <p><strong>Usage notes:</strong> Use the + button at the bottom of each row to register a team entering that row's pit. You will be prompted for the team number. The team takes the first kart in that row; the team's previous kart will be placed at the end of the same row (if any).</p>
+    <section class="notes card">
+      <strong>Notes:</strong> Click + on a row to register a team entering that row (you will be prompted for the team number). Manual overrides are for mechanic swaps and score corrections; pit entry is automatic via +. Adaptive filtering and team-exclusion for inconsistent drivers are active.
     </section>
+
   </main>
 
   <script src="app.js"></script>
