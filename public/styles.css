@@ -1,48 +1,64 @@
 :root{
-  --bg:#f6f8fb; --card:#fff; --accent:#1976d2; --muted:#666;
+  --bg:#f5f7fb; --card:#ffffff; --accent:#1e6fff; --muted:#6b7280;
 }
 *{box-sizing:border-box}
 body{margin:0;font-family:Inter,Arial,Helvetica,sans-serif;background:var(--bg);color:#111}
-header{background:var(--card);padding:12px 16px;box-shadow:0 1px 4px rgba(0,0,0,0.06)}
-h1{margin:0;font-size:20px}
-main{padding:12px;max-width:1200px;margin:0 auto}
-.card{background:var(--card);padding:12px;border-radius:8px;box-shadow:0 2px 8px rgba(0,0,0,0.04);margin-bottom:12px}
-.controls .row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
-.controls input[type="text"], .controls input[type="number"], .controls input{padding:8px;border-radius:6px;border:1px solid #ddd}
-.controls button{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:6px;cursor:pointer}
-.status{margin-top:4px;color:var(--muted)}
+.header{background:var(--card);border-bottom:1px solid rgba(0,0,0,0.04)}
+.header-inner{max-width:1200px;margin:0 auto;padding:14px 16px}
+.header h1{margin:0;font-size:18px}
+.header-sub{color:var(--muted);font-size:13px;margin-top:4px}
 
 /* layout */
-.layout{display:flex;gap:12px;align-items:flex-start}
-.left{flex:0 0 340px}
-.center{flex:1 1 520px}
-.right{flex:0 0 300px;display:flex;flex-direction:column;gap:12px}
+.main{max-width:1200px;margin:12px auto;padding:0 12px}
+.card{background:var(--card);padding:12px;border-radius:10px;box-shadow:0 6px 18px rgba(2,6,23,0.06);margin-bottom:12px}
+.controls-row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.controls-row input[type="text"], .controls-row input[type="number"], .controls-row input{padding:8px;border-radius:8px;border:1px solid #e6e9ef}
+.controls-row button{background:var(--accent);color:white;border:0;padding:8px 12px;border-radius:8px;cursor:pointer}
+
+.status{margin-top:8px;color:var(--muted)}
+
+/* content */
+.content{display:flex;gap:12px;align-items:flex-start}
+.left{flex:0 0 360px}
+.center{flex:1}
+.right{flex:0 0 320px;display:flex;flex-direction:column;gap:12px}
 
 /* live table */
-.live-table{max-height:520px;overflow:auto;font-size:14px}
-.live-row{display:flex;gap:8px;padding:6px;border-bottom:1px solid #eee;align-items:center}
+.live-table{max-height:480px;overflow:auto;font-size:14px}
+.live-row{display:flex;gap:8px;padding:8px;border-bottom:1px solid #eee;align-items:center}
 .live-row div{min-width:60px}
 
-/* pit columns -> vertical stacks (rows independent) */
+/* pit container: rows horizontally, karts vertical stack */
 .pit-container{display:flex;gap:12px;flex-wrap:wrap}
 .pit-column{display:flex;flex-direction:column;gap:8px;padding:8px;border-radius:8px;min-width:160px;align-items:center;background:linear-gradient(180deg,#fff,#f7fbff)}
-.kart-box{width:140px;min-height:100px;border-radius:10px;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;font-weight:700;padding:8px;box-shadow:0 3px 8px rgba(0,0,0,0.06);margin-bottom:6px}
+.pit-column h4{margin:0 0 6px 0}
+
+/* kart box (square-like) */
+.kart-box{
+  width:140px; min-height:100px; border-radius:10px; display:flex;flex-direction:column;justify-content:center;align-items:center;color:#fff;font-weight:700;padding:10px;box-shadow:0 6px 14px rgba(0,0,0,0.06)
+}
+.kart-default{background:#8aa6c7;color:#fff}
 .kart-blue{background:#3498db}
 .kart-purple{background:#9b59b6}
 .kart-green{background:#2ecc71}
 .kart-yellow{background:#f1c40f;color:#111}
 .kart-orange{background:#e67e22}
 .kart-red{background:#e74c3c}
-.kart-controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;margin-top:6px}
-.kart-controls select, .kart-controls input, .kart-controls button{font-size:12px;padding:6px;border-radius:6px;border:1px solid #ddd}
-.add-btn{margin-top:8px;background:#1976d2;color:white;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
+
+.kart-label{font-size:18px;margin-bottom:6px}
+.kart-score{font-size:14px;margin-bottom:8px}
+.kart-controls{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+.kart-controls button, .kart-controls input{font-size:12px;padding:6px;border-radius:6px;border:1px solid #ddd}
+
+/* add button */
+.add-btn{margin-top:6px;background:#1976d2;color:white;border:0;padding:8px 10px;border-radius:8px;cursor:pointer}
 
 /* sidebar lists */
 #kartScoresList div, #teamList div{padding:6px;border-bottom:1px solid #eee;font-size:13px}
 
 /* responsive */
 @media (max-width:900px){
-  .layout{flex-direction:column}
+  .content{flex-direction:column}
   .left,.right{width:100%}
   .kart-box{width:120px}
 }
