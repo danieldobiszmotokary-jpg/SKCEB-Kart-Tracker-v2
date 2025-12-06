@@ -1,188 +1,183 @@
-// app.js - FINAL implementation (no test mode)
-// Features: Apex fetch, universal parser, per-team per-stint tracking, scoring by within-team comparisons,
-// adaptive filtering (rain/conditions), inconsistent-team exclusion, independent pit rows, manual overrides,
-// separate kart scores and team lists, export, polling.
+// app.js - Full system client
+// Features: universal Apex detection via /detect-json, live table, pit visualization,
+// within-team scoring, adaptive filters, manual overrides, export, polling.
 
 // ---------- Config ----------
 let pollTimer = null;
-let pollSeconds = 5;
-const IGNORE_FIRST_LAPS = 4;     // laps of fighting to ignore at start of stint
-const MAX_STINT_LAPS = 200;
-const MAX_RECENT = 12;           // laps per stint considered for averaging
-const OUTLIER_FACTOR = 2.6;      // adaptive outlier filter sensitivity
-const INCONSISTENCY_STD_FACTOR = 2.5; // if team variance > factor => exclude team
+const IGNORE_FIRST_LAPS = 4;
+const OUTLIER_FACTOR = 2.6;
+const INCONSISTENCY_STD_FACTOR = 2.5;
 const SCORE_MIN = 0, SCORE_MAX = 1000;
 
-// ---------- Data models ----------
-let numRows = 3;
-let kartsPerRow = 3;
+// ---------- Models ----------
+const pitRows = [];         // pitRows[row] = [ kartId, ... ]
+const karts = {};           // karts[kid] = { id, label, laps:[], score, manualScore, manualMode, colorClass }
+const teams = {};           // teams[teamNumber] = { number, currentKartId, previousKartId, stints:[], excluded:false }
+let liveTiming = {};        // teamNumber -> { name, kartNumber, lastLap, bestLap, position }
 
-const pitRows = [];   // pitRows[row] = [ kartId, ... ] (independent)
-const karts = {};     // karts[kid] = { id, label, laps:[], score:null, manualScore:null, manualMode:false, color }
-const teams = {};     // teams[teamNumber] = { number, currentKartId, previousKartId, stints: [{kartId, laps:[], avg}], excluded:false }
+// ---------- UI refs ----------
+const apexUrlInput = document.getElementById('apexUrl');
+const pollSecondsInput = document.getElementById('pollSeconds');
+const fetchOnceBtn = document.getElementById('fetchOnceBtn');
+const startBtn = document.getElementById('startBtn');
+const stopBtn = document.getElementById('stopBtn');
+const statusEl = document.getElementById('status');
+const numRowsInput = document.getElementById('numRows');
+const kartsPerRowInput = document.getElementById('kartsPerRow');
+const setupBtn = document.getElementById('setupBtn');
+const liveTableEl = document.getElementById('liveTable');
+const pitContainerEl = document.getElementById('pitContainer');
+const kartScoresListEl = document.getElementById('kartScoresList');
+const teamListEl = document.getElementById('teamList');
+const exportBtn = document.getElementById('exportBtn');
+const resetColorsBtn = document.getElementById('resetColorsBtn');
 
-// live table raw: map team -> { lastLap, bestLap, name }
-let liveTiming = {}; // { teamNumber: { name, kartNumber, lastLap, bestLap } }
+fetchOnceBtn.onclick = doFetchOnce;
+startBtn.onclick = startPolling;
+stopBtn.onclick = stopPolling;
+setupBtn.onclick = setupPitRowsUI;
+exportBtn.onclick = exportJSON;
+resetColorsBtn.onclick = resetManualColors;
 
-// ---------- Utilities ----------
-function setStatus(s){ document.getElementById('status').textContent = s; }
+// ---------- Helpers ----------
+function setStatus(s){ statusEl.textContent = s; }
 function clamp(v,a,b){ return Math.max(a, Math.min(b, v)); }
-function colorClass(name){
-  switch(name){
-    case 'blue': return 'kart-blue';
-    case 'purple': return 'kart-purple';
-    case 'green': return 'kart-green';
-    case 'yellow': return 'kart-yellow';
-    case 'orange': return 'kart-orange';
-    case 'red': return 'kart-red';
-    default: return 'kart-blue';
-  }
+function scoreToClass(score){
+  if(score == null) return 'kart-default';
+  if(score >= 900) return 'kart-purple';
+  if(score >= 700) return 'kart-green';
+  if(score >= 500) return 'kart-yellow';
+  if(score >= 300) return 'kart-orange';
+  return 'kart-red';
+}
+function formatLap(s){
+  if(s == null) return '-';
+  const m = Math.floor(s/60);
+  const sec = (s - m*60).toFixed(3);
+  return `${m}:${sec.padStart(6,'0')}`;
+}
+function parseTimeToSec(t){
+  if(t == null) return null;
+  if(typeof t === 'number') return t;
+  const s = String(t).trim();
+  if(s.match(/^\d+:\d{2}(\.\d+)?$/)){ const [m,rest]=s.split(':'); return parseInt(m,10)*60 + parseFloat(rest); }
+  const f = parseFloat(s.replace(',', '.')); return isNaN(f)?null:f;
 }
 
-// convert lap seconds to "higher=better" raw metric; we will later normalize to 0-1000
-function lapToMetric(lapSec){
-  // Use a baseline scale: smaller lap -> higher metric. Clip reasonable band.
-  // baseline: metric = 120 - lapSec (so 60s -> 60, 90s -> 30)
-  const raw = clamp(120 - lapSec, -10, 120);
-  return raw;
-}
-
-// ---------- Apex fetch & parser ----------
-async function proxyFetch(url){
+// ---------- Server detect ----------
+async function detectJsonForUrl(url){
   try{
-    const res = await fetch('/proxy-fetch', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ url })
-    });
-    const json = await res.json();
-    if(!json.success) throw new Error('proxy failed');
-    return json.html;
-  } catch(e){
-    console.error('proxyFetch error', e);
-    return null;
-  }
+    const res = await fetch('/detect-json', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ url }) });
+    return await res.json();
+  }catch(e){ console.error('detect error', e); return { success:false, error: e && e.message }; }
 }
 
-// Robust parser: returns array of {teamNumber, teamName, kartNumber, lapSec}
-function parseApexHtml(html){
-  if(!html) return [];
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(html, 'text/html');
-  const out = [];
+// ---------- Universal extractor ----------
+function extractRowsFromResponse(resp){
+  if(!resp || !resp.success) return [];
+  if(resp.type === 'json') return extractFromJson(resp.payload);
+  return extractFromHtml(resp.payload);
+}
 
-  // Strategy: look for table rows containing time-like and number-like cells
-  const tables = Array.from(doc.querySelectorAll('table'));
-  for(const t of tables){
-    const rows = Array.from(t.querySelectorAll('tr'));
-    for(const tr of rows){
-      const cells = Array.from(tr.querySelectorAll('td')).map(td => td.textContent.trim());
-      if(cells.length < 2) continue;
-      // detect time and team/number
-      const timeIdx = cells.findIndex(c => /\d{1,2}:\d{2}\.\d{1,3}|\b\d+\.\d{1,3}\b/.test(c));
-      const numIdx = cells.findIndex(c => /\b\d{1,4}\b/.test(c));
-      if(timeIdx !== -1 && numIdx !== -1){
-        const timeMatch = (cells[timeIdx].match(/(\d{1,2}:\d{2}\.\d{1,3}|\b\d+\.\d{1,3}\b)/) || [null])[0];
-        const teamNum = (cells[numIdx].match(/\d{1,4}/) || [null])[0];
-        if(teamNum && timeMatch){
-          out.push({
-            teamNumber: teamNum,
-            teamName: cells.slice(0,1).join(' ') || '',
-            kartNumber: teamNum, // Apex often uses same for transponder; will map teams by number
-            lapSec: parseTimeToSec(timeMatch),
-            rawCells: cells
-          });
+function extractFromJson(json){
+  const out = [];
+  // deep scan for arrays with rows
+  function scan(o){
+    if(!o) return;
+    if(Array.isArray(o)){
+      // inspect for candidate objects
+      o.forEach(item=>{
+        if(item && typeof item === 'object'){
+          const teamName = item.team || item.name || item.driver || item.entrant || item.team_name || item.pilot || null;
+          const kartNumber = item.kart || item.kart_number || item.number || item.transponder || item.car || item.entry_no || item.position || null;
+          const lastLap = parseTimeToSec(item.lastLap || item.last || item.last_lap || item.lap || item.time || item.currentLap || item.current_lap || null);
+          const bestLap = parseTimeToSec(item.best || item.bestLap || item.best_lap || item.fastest || null);
+          const position = item.position || item.pos || item.rank || null;
+          if(teamName || kartNumber){
+            out.push({ teamName: String(teamName||'').trim(), kartNumber: kartNumber!=null?String(kartNumber):null, lastLap, bestLap, position });
+          }
+        }
+        scan(item);
+      });
+    } else if(typeof o === 'object'){
+      Object.values(o).forEach(v=>scan(v));
+    }
+  }
+  scan(json);
+  // deduplicate by team+kart+lap
+  const ded = []; const seen = new Set();
+  out.forEach(r=>{
+    const k = `${r.teamName}|${r.kartNumber}|${r.lastLap}`;
+    if(!seen.has(k)){ seen.add(k); ded.push(r); }
+  });
+  return ded;
+}
+
+function extractFromHtml(html){
+  const out = [];
+  try{
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, 'text/html');
+    const tables = Array.from(doc.querySelectorAll('table'));
+    for(const t of tables){
+      const trs = Array.from(t.querySelectorAll('tr'));
+      for(const tr of trs){
+        const tds = Array.from(tr.querySelectorAll('td')).map(td=>td.textContent.trim());
+        if(tds.length < 2) continue;
+        const timeIdx = tds.findIndex(t => /\d{1,2}:\d{2}\.\d{1,3}|\b\d+\.\d{1,3}\b/.test(t));
+        const numIdx = tds.findIndex(t => /\b\d{1,4}\b/.test(t));
+        if(timeIdx !== -1 && numIdx !== -1){
+          const rawTime = (tds[timeIdx].match(/(\d{1,2}:\d{2}\.\d{1,3}|\b\d+\.\d{1,3}\b)/) || [null])[0];
+          const teamNum = (tds[numIdx].match(/\d{1,4}/) || [null])[0];
+          out.push({ teamName: tds[0]||'', kartNumber: teamNum?String(teamNum):null, lastLap: rawTime?parseTimeToSec(rawTime):null, bestLap:null, position:null});
         }
       }
+      if(out.length) break;
     }
-    if(out.length) break;
-  }
-
-  // fallback: search spans/divs for time and number pairs
-  if(out.length === 0){
+    if(out.length) return out;
     const nodes = Array.from(doc.querySelectorAll('div,span,li'));
     nodes.forEach(n=>{
       const txt = n.textContent.trim();
       const timeMatch = txt.match(/(\d{1,2}:\d{2}\.\d{1,3}|\b\d+\.\d{1,3}\b)/);
       const numMatch = txt.match(/\b\d{1,4}\b/);
-      if(timeMatch && numMatch){
-        out.push({ teamNumber: numMatch[0], teamName: '', kartNumber: numMatch[0], lapSec: parseTimeToSec(timeMatch[0]), rawCells:[txt] });
-      }
+      if(timeMatch && numMatch) out.push({ teamName: txt.slice(0,40), kartNumber:String(numMatch[0]), lastLap: parseTimeToSec(timeMatch[0]), bestLap:null, position:null });
     });
-  }
-
-  // dedupe and return
-  const seen = new Set();
-  const cleaned = [];
-  for(const r of out){
-    if(!r.teamNumber || !r.lapSec) continue;
-    const key = `${r.teamNumber}|${r.lapSec.toFixed(2)}`;
-    if(seen.has(key)) continue;
-    seen.add(key);
-    cleaned.push(r);
-  }
-  return cleaned;
+    return out;
+  }catch(e){ console.error('html parse', e); return []; }
 }
 
-function parseTimeToSec(t){
-  if(!t) return null;
-  if(t.indexOf(':') !== -1){
-    const parts = t.split(':');
-    const m = parseInt(parts[0],10), s = parseFloat(parts[1]);
-    return m*60 + s;
-  } else return parseFloat(t);
-}
-
-// ---------- Live processing pipeline ----------
-function integrateLiveRows(rows){
-  // rows: [{teamNumber, teamName, kartNumber, lapSec}]
+// ---------- Integrate rows into models ----------
+function integrateRows(rows){
   rows.forEach(r=>{
-    liveTiming[r.teamNumber] = liveTiming[r.teamNumber] || { name: r.teamName || '', kartNumber: r.kartNumber, lastLap: null, bestLap: null };
-    liveTiming[r.teamNumber].name = r.teamName || liveTiming[r.teamNumber].name;
-    liveTiming[r.teamNumber].kartNumber = r.kartNumber || liveTiming[r.teamNumber].kartNumber;
-    liveTiming[r.teamNumber].lastLap = r.lapSec;
-    liveTiming[r.teamNumber].bestLap = liveTiming[r.teamNumber].bestLap ? Math.min(liveTiming[r.teamNumber].bestLap, r.lapSec) : r.lapSec;
+    // determine team key (prefer kart number if present, else teamName)
+    const teamKey = r.kartNumber ? String(r.kartNumber) : ('T_' + (r.teamName || 'x'));
+    liveTiming[teamKey] = liveTiming[teamKey] || { name: r.teamName || '', kartNumber: r.kartNumber || teamKey, lastLap: null, bestLap: null, position: r.position || null };
+    if(r.lastLap != null) liveTiming[teamKey].lastLap = r.lastLap;
+    if(r.bestLap != null) liveTiming[teamKey].bestLap = r.bestLap;
+    if(r.position != null) liveTiming[teamKey].position = r.position;
 
-    // Map team -> teams model. Ensure team exists
-    if(!teams[r.teamNumber]){
-      teams[r.teamNumber] = { number: r.teamNumber, currentKartId: null, previousKartId: null, stints: [], excluded:false };
-    }
+    if(!teams[teamKey]) teams[teamKey] = { number: teamKey, currentKartId: null, previousKartId: null, stints: [], excluded:false };
 
-    // If team currently has a kart assigned (teams[...] currentKartId), push lap into that stint's lap list
-    const team = teams[r.teamNumber];
+    // if team has currentKartId, push lap into current stint
+    const team = teams[teamKey];
     if(team.currentKartId){
-      // find current stint (last stint with same kart and not closed)
-      let curStint = team.stints.length ? team.stints[team.stints.length-1] : null;
-      if(!curStint || curStint.kartId !== team.currentKartId){
-        // start new stint
-        curStint = { kartId: team.currentKartId, laps: [] };
-        team.stints.push(curStint);
-      }
-      curStint.laps.push(r.lapSec);
-      // cap
-      if(curStint.laps.length > MAX_STINT_LAPS) curStint.laps.shift();
-      // also append raw to karts[kartId] for history
-      if(karts[team.currentKartId]) {
-        karts[team.currentKartId].laps.push(r.lapSec);
-        if(karts[team.currentKartId].laps.length > 1000) karts[team.currentKartId].laps.shift();
-      }
-    } else {
-      // team not assigned a kart yet; waiting until pit entry happens
+      let cur = team.stints.length ? team.stints[team.stints.length-1] : null;
+      if(!cur || cur.kartId !== team.currentKartId){ cur = { kartId: team.currentKartId, laps: [] }; team.stints.push(cur); }
+      if(r.lastLap != null) cur.laps.push(r.lastLap);
+      if(cur.laps.length > 200) cur.laps.shift();
+      if(karts[team.currentKartId]){ if(r.lastLap != null) karts[team.currentKartId].laps.push(r.lastLap); if(karts[team.currentKartId].laps.length > 1000) karts[team.currentKartId].laps.shift(); }
     }
   });
 
-  // After integrating, recompute scoring
   recomputeScoring();
   renderAll();
 }
 
-// ---------- Stint averaging & noise handling ----------
+// ---------- Stint average & adaptive filters ----------
 function computeStintAverage(stint){
-  // stint.laps is array. ignore first IGNORE_FIRST_LAPS laps (start noise)
   if(!stint || !stint.laps || stint.laps.length === 0) return null;
   const use = stint.laps.slice(IGNORE_FIRST_LAPS);
   if(use.length === 0) return null;
-  // filter adaptive: remove laps that are huge outliers relative to median of use
   const sorted = use.slice().sort((a,b)=>a-b);
   const median = sorted[Math.floor(sorted.length/2)];
   const mad = Math.max(0.5, Math.abs(median * 0.12));
@@ -192,367 +187,221 @@ function computeStintAverage(stint){
   return { avg, median, count: filtered.length };
 }
 
-// ---------- Adaptive condition detection & team exclusion ----------
-function detectConditionShift(){
-  // compute median of all recent stint medians across teams
-  const medians = [];
-  Object.values(teams).forEach(team=>{
-    team.stints.slice(-3).forEach(st=>{ 
-      const cs = computeStintAverage(st);
-      if(cs && cs.median) medians.push(cs.median);
-    });
-  });
-  if(medians.length < 3) return null;
-  medians.sort((a,b)=>a-b);
-  const mid = medians[Math.floor(medians.length/2)];
-  return mid; // baseline median lap across recent stints
-}
-
 function detectInconsistentTeams(){
-  // mark teams excluded if their stint averages show too much variance relative to own mean
   Object.values(teams).forEach(team=>{
-    const avgList = [];
-    team.stints.forEach(st=>{
-      const cs = computeStintAverage(st);
-      if(cs && cs.avg) avgList.push(cs.avg);
-    });
-    if(avgList.length < 2){
-      team.excluded = false;
-      return;
-    }
-    const mean = avgList.reduce((s,x)=>s+x,0)/avgList.length;
-    const variance = avgList.reduce((s,x)=>s+Math.pow(x-mean,2),0)/avgList.length;
+    const avgs = [];
+    team.stints.forEach(st=>{ const cs = computeStintAverage(st); if(cs && cs.avg) avgs.push(cs.avg); });
+    if(avgs.length < 2){ team.excluded = false; return; }
+    const mean = avgs.reduce((s,x)=>s+x,0)/avgs.length;
+    const variance = avgs.reduce((s,x)=>s+Math.pow(x-mean,2),0)/avgs.length;
     const std = Math.sqrt(variance);
-    // relative std / mean is indicator; if too high mark excluded
-    if(std > (INCONSISTENCY_STD_FACTOR * Math.max(0.5, mean*0.01))){
-      team.excluded = true;
-    } else {
-      team.excluded = false;
-    }
+    team.excluded = (std > (INCONSISTENCY_STD_FACTOR * Math.max(0.5, mean*0.01)));
   });
 }
 
-// ---------- Scoring building (stint-to-stint comparisons) ----------
+// ---------- Scoring (within-team comparisons) ----------
 function recomputeScoring(){
-  // Step 1: compute per-team per-stint averages (clean)
-  const teamStintAverages = {}; // team -> [{kartId, avg}]
+  const teamStints = {};
   Object.keys(teams).forEach(tn=>{
-    const team = teams[tn];
-    teamStintAverages[tn] = [];
-    team.stints.forEach(st=>{
+    teamStints[tn] = [];
+    teams[tn].stints.forEach(st=>{
       const cs = computeStintAverage(st);
-      if(cs && cs.avg) teamStintAverages[tn].push({ kartId: st.kartId, avg: cs.avg });
+      if(cs && cs.avg) teamStints[tn].push({ kartId: st.kartId, avg: cs.avg });
     });
   });
 
-  // Step 2: detect condition baseline & inconsistent teams
   detectInconsistentTeams();
-  const baseline = detectConditionShift();
 
-  // Step 3: build per-kart "score-contributions" from teams
-  // For each team, compare successive stints (only if different kart) to compute delta = previousAvg - nextAvg
-  // Positive delta => improvement; negative => worse. We interpret kart quality such that if team performs better on kart B compared to A, B is better.
-  const kartContributions = {}; // kartId -> array of metrics
-  Object.keys(teamStintAverages).forEach(tn=>{
-    if(teams[tn].excluded) return; // ignore inconsistent teams
-    const arr = teamStintAverages[tn];
-    if(arr.length < 2) return;
+  const contributions = {}; // kid -> [metrics]
+  Object.keys(teamStints).forEach(tn=>{
+    if(teams[tn].excluded) return;
+    const arr = teamStints[tn];
     for(let i=1;i<arr.length;i++){
       const prev = arr[i-1], cur = arr[i];
-      if(prev.kartId === cur.kartId) continue; // same kart twice -> no comparison
-      // We compute improvement metric: prev.avg - cur.avg (positive means cur kart faster)
-      const metric = prev.avg - cur.avg;
-      // Normalize metric by baseline (if present) to be condition-aware
-      const normalized = baseline ? (metric / baseline) : metric;
-      // push contribution to both karts: cur gets +normalized, prev gets -normalized
-      kartContributions[cur.kartId] = kartContributions[cur.kartId] || [];
-      kartContributions[prev.kartId] = kartContributions[prev.kartId] || [];
-      kartContributions[cur.kartId].push(normalized);
-      kartContributions[prev.kartId].push(-normalized);
+      if(prev.kartId === cur.kartId) continue;
+      const metric = prev.avg - cur.avg; // positive => cur is faster
+      contributions[cur.kartId] = contributions[cur.kartId] || []; contributions[cur.kartId].push(metric);
+      contributions[prev.kartId] = contributions[prev.kartId] || []; contributions[prev.kartId].push(-metric);
     }
   });
 
-  // Step 4: aggregate contributions into raw quality metric
-  const rawMetrics = {};
-  Object.keys(kartContributions).forEach(kid=>{
-    const arr = kartContributions[kid];
-    const avg = arr.reduce((s,x)=>s+x,0)/arr.length;
-    rawMetrics[kid] = avg;
+  // ensure every kart has raw 0 at least
+  Object.keys(karts).forEach(k=>{ if(!(k in contributions)) contributions[k] = contributions[k] || []; });
+
+  const raw = {};
+  Object.keys(contributions).forEach(kid=>{
+    const arr = contributions[kid];
+    raw[kid] = (arr.length ? arr.reduce((s,x)=>s+x,0)/arr.length : 0);
   });
 
-  // Ensure every known kart has an entry (even zero)
-  Object.keys(karts).forEach(kid => { if(!(kid in rawMetrics)) rawMetrics[kid] = 0; });
-
-  // Step 5: normalize rawMetrics into 0..1000 (linear scaling)
-  const vals = Object.values(rawMetrics);
+  // normalize
+  const vals = Object.values(raw);
   const min = Math.min(...vals), max = Math.max(...vals);
   const range = (max - min) || 1;
-  Object.keys(rawMetrics).forEach(kid=>{
-    const norm = (rawMetrics[kid] - min) / range; // 0..1
+  Object.keys(raw).forEach(kid=>{
+    const norm = (raw[kid] - min)/range;
     const score = Math.round(norm * (SCORE_MAX - SCORE_MIN) + SCORE_MIN);
-    // If manualScore mode, do not overwrite
-    if(karts[kid].manualMode){
-      // keep manualScore as karts[kid].score
-    } else {
+    if(!karts[kid].manualMode){
       karts[kid].score = score;
-      karts[kid].color = scoreToColor(score);
+      karts[kid].colorClass = scoreToClass(score);
     }
   });
 
-  // Render updated lists
   renderSidebar();
 }
 
-// choose color from 0-1000 score
-function scoreToColor(score){
-  if(score == null) return 'blue';
-  if(score >= 900) return 'purple';
-  if(score >= 700) return 'green';
-  if(score >= 500) return 'yellow';
-  if(score >= 300) return 'orange';
-  return 'red';
-}
-
-// ---------- Pit row logic (independent rows) ----------
+// ---------- Pit row logic ----------
 function setupPitRowsUI(){
-  numRows = parseInt(document.getElementById('numRows').value) || 3;
-  kartsPerRow = parseInt(document.getElementById('kartsPerRow').value) || 3;
-  // build fresh unknown karts for pit placeholders
+  const nr = Math.max(1, parseInt(numRowsInput.value) || 3);
+  const kp = Math.max(1, parseInt(kartsPerRowInput.value) || 3);
   pitRows.length = 0;
-  // create unique unknown IDs U1..UN
-  let uid=1;
-  for(let r=0;r<numRows;r++){
+  let uid = 1;
+  for(let r=0;r<nr;r++){
     pitRows[r] = [];
-    for(let s=0;s<kartsPerRow;s++){
-      const kid = `U${uid++}`;
-      karts[kid] = { id:kid, label:'', laps:[], score:null, manualScore:null, manualMode:false, color:'blue' };
-      pitRows[r].push(kid);
+    for(let s=0;s<kp;s++){
+      const id = `U${uid++}`;
+      karts[id] = { id, label:'', laps:[], score:null, manualScore:null, manualMode:false, colorClass:'kart-default' };
+      pitRows[r].push(id);
     }
   }
   renderAll();
-  setStatus(`Setup ${numRows} rows × ${kartsPerRow} slots`);
+  setStatus(`Setup ${nr} rows × ${kp} slots (placeholders created)`);
 }
 
-// When team enters rowIndex (user clicks +), exact behavior:
-// - prompt for teamNumber
-// - Team takes FIRST kart in that row (removed)
-// - remaining shift forward
-// - the team's previousKartId (if any) is appended at end of same row
 function handleRowAdd(rowIndex){
-  const teamNumber = prompt('Enter team number (transponder/number):');
+  const teamNumber = prompt('Enter team number (transponder/team number):');
   if(!teamNumber) return;
   if(!teams[teamNumber]) teams[teamNumber] = { number: teamNumber, currentKartId: null, previousKartId: null, stints: [], excluded:false };
   const row = pitRows[rowIndex];
-  if(!row || row.length === 0) { alert('Row empty'); return; }
-  // 1. take first kart
-  const takenKart = row.shift();
-  // assign to team
+  if(!row || row.length === 0){ alert('Row empty'); return; }
+  const taken = row.shift();
   teams[teamNumber].previousKartId = teams[teamNumber].currentKartId || null;
-  teams[teamNumber].currentKartId = takenKart;
-  // label physical kart with team
-  karts[takenKart].label = teamNumber;
-  // 2. append team's previous kart to end
+  teams[teamNumber].currentKartId = taken;
+  karts[taken].label = teamNumber;
   const prev = teams[teamNumber].previousKartId;
   if(prev && karts[prev]){
-    // remove prev if present in rows elsewhere
     removeKartFromAllRows(prev);
     row.push(prev);
   }
-  // done
   recomputeScoring();
   renderAll();
-  setStatus(`Team ${teamNumber} took kart ${takenKart} in row ${rowIndex+1}`);
+  setStatus(`Team ${teamNumber} took kart ${taken} in Row ${rowIndex+1}`);
 }
 
 function removeKartFromAllRows(kid){
-  for(let r=0;r<pitRows.length;r++){
-    pitRows[r] = pitRows[r].filter(x=>x !== kid);
-  }
+  for(let r=0;r<pitRows.length;r++) pitRows[r] = pitRows[r].filter(x=>x !== kid);
 }
 
-// ---------- Manual override functions (inside kart box) ----------
+// manual overrides
 function setKartManualNumber(kid){
-  const v = prompt('Set kart number / label (leave empty to clear):', karts[kid].label || '');
+  const v = prompt('Set kart label/number (leave empty to clear):', karts[kid].label || '');
   if(v === null) return;
   karts[kid].label = v.trim();
-  // if label corresponds to team, map team currentKartId
-  if(karts[kid].label && teams[karts[kid].label]) teams[karts[k].label].currentKartId = kid;
+  if(karts[kid].label && teams[karts[kid].label]) teams[karts[kid].label].currentKartId = kid;
   renderAll();
 }
-
 function setKartManualScore(kid){
-  const s = prompt('Set manual score 0..1000 (leave empty to clear):', karts[kid].manualScore != null ? karts[kid].manualScore : '');
+  const s = prompt('Set manual score 0..1000 (leave empty to clear):', karts[kid].manualScore != null ? String(karts[kid].manualScore) : '');
   if(s === null) return;
-  if(s === '') {
-    karts[kid].manualScore = null;
-    karts[kid].manualMode = false;
-    // restore auto score (recompute)
-    recomputeScoring();
-  } else {
-    const v = clamp(parseInt(s,10), 0, 1000);
-    karts[kid].manualScore = v;
-    karts[kid].score = v;
-    karts[kid].manualMode = true;
-    karts[kid].color = scoreToColor(v);
-  }
+  if(s === ''){ karts[kid].manualScore = null; karts[kid].manualMode = false; recomputeScoring(); }
+  else { const v = clamp(parseInt(s,10),0,1000); karts[kid].manualScore = v; karts[kid].score = v; karts[kid].manualMode = true; karts[kid].colorClass = scoreToClass(v); }
   renderAll();
 }
+function restoreKartAuto(kid){ karts[kid].manualScore = null; karts[kid].manualMode = false; recomputeScoring(); }
 
-function restoreKartAuto(kid){
-  karts[kid].manualScore = null;
-  karts[kid].manualMode = false;
-  recomputeScoring();
-}
-
-// ---------- Renderers ----------
+// ---------- Renders ----------
 function renderLiveTable(){
-  const container = document.getElementById('liveTable');
-  const keys = Object.keys(liveTiming).sort((a,b)=> {
-    // simple: by lastLap ascending (faster first) else by team num
+  const keys = Object.keys(liveTiming).sort((a,b)=>{
     const la = liveTiming[a].lastLap || 9999, lb = liveTiming[b].lastLap || 9999;
-    return la - lb || (parseInt(a)-parseInt(b));
+    return la - lb || (parseInt(a) - parseInt(b));
   });
-  if(keys.length === 0){ container.innerHTML = '<div class="live-row">No live timing</div>'; return; }
-  container.innerHTML = '';
+  liveTableEl.innerHTML = '';
+  if(keys.length === 0){ liveTableEl.innerHTML = '<div>No live timing</div>'; return; }
   keys.forEach(tn=>{
-    const row = liveTiming[tn];
-    const div = document.createElement('div');
-    div.className = 'live-row';
-    div.innerHTML = `<div style="width:60px">${tn}</div>
-      <div style="flex:1">${row.name || '-'}</div>
-      <div style="width:80px">${row.kartNumber || '-'}</div>
-      <div style="width:90px">${row.lastLap?formatLap(row.lastLap):'-'}</div>
-      <div style="width:90px">${row.bestLap?formatLap(row.bestLap):'-'}</div>`;
-    container.appendChild(div);
+    const r = liveTiming[tn];
+    const div = document.createElement('div'); div.className = 'live-row';
+    const a = document.createElement('div'); a.style.width='60px'; a.textContent = tn;
+    const b = document.createElement('div'); b.style.flex='1'; b.textContent = r.name || '-';
+    const c = document.createElement('div'); c.style.width='80px'; c.textContent = r.kartNumber || '-';
+    const d = document.createElement('div'); d.style.width='90px'; d.textContent = r.lastLap?formatLap(r.lastLap):'-';
+    const e = document.createElement('div'); e.style.width='90px'; e.textContent = r.bestLap?formatLap(r.bestLap):'-';
+    div.appendChild(a); div.appendChild(b); div.appendChild(c); div.appendChild(d); div.appendChild(e);
+    liveTableEl.appendChild(div);
   });
-}
-
-function formatLap(s){
-  if(s == null) return '-';
-  const m = Math.floor(s/60);
-  const sec = (s - m*60).toFixed(3);
-  return `${m}:${sec.padStart(6,'0')}`;
 }
 
 function renderPit(){
-  const cont = document.getElementById('pitContainer');
-  cont.innerHTML = '';
-  for(let r=0;r<pitRows.length;r++){
-    const col = document.createElement('div');
-    col.className = 'pit-column';
-    const h = document.createElement('h4'); h.textContent = `Row ${r+1}`; col.appendChild(h);
-    pitRows[r].forEach((kid, idx)=>{
-      const k = karts[kid];
-      const box = document.createElement('div');
-      box.className = 'kart-box ' + colorClass(k.color || 'blue');
-      const label = document.createElement('div'); label.style.fontSize='16px'; label.style.marginBottom='6px';
-      label.textContent = k.label || kid;
-      box.appendChild(label);
-      const scorediv = document.createElement('div'); scorediv.textContent = k.score != null ? `Score: ${k.score}` : 'Score: -';
-      scorediv.style.fontSize='13px'; box.appendChild(scorediv);
-
-      // manual badge
-      if(k.manualMode) {
-        const b = document.createElement('div'); b.textContent='MANUAL'; b.style.fontSize='11px'; b.style.marginTop='4px'; b.style.opacity='0.9';
-        box.appendChild(b);
-      }
-
-      // controls
-      const ctr = document.createElement('div'); ctr.className='kart-controls';
+  pitContainerEl.innerHTML = '';
+  pitRows.forEach((row, rIdx)=>{
+    const col = document.createElement('div'); col.className = 'pit-column';
+    const h = document.createElement('h4'); h.textContent = `Row ${rIdx+1}`; col.appendChild(h);
+    row.forEach(kid=>{
+      const kk = karts[kid];
+      const box = document.createElement('div'); box.className = 'kart-box ' + (kk.colorClass || 'kart-default');
+      const label = document.createElement('div'); label.className = 'kart-label'; label.textContent = kk.label || kk.id;
+      const scoreD = document.createElement('div'); scoreD.className = 'kart-score'; scoreD.textContent = kk.score != null ? `Score: ${kk.score}` : 'Score: -';
+      box.appendChild(label); box.appendChild(scoreD);
+      const ctr = document.createElement('div'); ctr.className = 'kart-controls';
       const btnNum = document.createElement('button'); btnNum.textContent='Set#'; btnNum.onclick = ()=> setKartManualNumber(kid);
       const btnScore = document.createElement('button'); btnScore.textContent='SetScore'; btnScore.onclick = ()=> setKartManualScore(kid);
       const btnAuto = document.createElement('button'); btnAuto.textContent='Auto'; btnAuto.onclick = ()=> restoreKartAuto(kid);
       ctr.appendChild(btnNum); ctr.appendChild(btnScore); ctr.appendChild(btnAuto);
       box.appendChild(ctr);
-
       col.appendChild(box);
     });
-
-    const addBtn = document.createElement('button'); addBtn.className='add-btn'; addBtn.textContent='+ Add (team enters this row)'; addBtn.onclick = ()=> handleRowAdd(r);
-    col.appendChild(addBtn);
-    cont.appendChild(col);
-  }
+    const add = document.createElement('button'); add.className = 'add-btn'; add.textContent = '+ Add (team enters this row)'; add.onclick = ()=> handleRowAdd(rIdx);
+    col.appendChild(add);
+    pitContainerEl.appendChild(col);
+  });
 }
 
 function renderSidebar(){
-  const ks = document.getElementById('kartScoresList');
-  ks.innerHTML = '';
-  const arr = Object.values(karts).slice().sort((a,b)=> (b.score||0) - (a.score||0));
-  arr.forEach(k=>{
-    const d = document.createElement('div');
-    d.textContent = `Kart ${k.id} | label:${k.label||'-'} | score:${k.score!=null?k.score:'-'} ${k.manualMode?'(M)':''}`;
-    ks.appendChild(d);
+  kartScoresListEl.innerHTML = '';
+  Object.values(karts).sort((a,b)=> (b.score||0) - (a.score||0)).forEach(k=>{
+    const d = document.createElement('div'); d.textContent = `Kart ${k.id} | label:${k.label||'-'} | score:${k.score!=null?k.score:'-' } ${k.manualMode?'(M)':''}`;
+    kartScoresListEl.appendChild(d);
   });
-
-  const tl = document.getElementById('teamList');
-  tl.innerHTML = '';
-  Object.keys(teams).sort((a,b)=>parseInt(a)-parseInt(b)).forEach(tn=>{
+  teamListEl.innerHTML = '';
+  Object.keys(teams).sort((a,b)=> a.localeCompare(b)).forEach(tn=>{
     const t = teams[tn];
-    const div = document.createElement('div');
-    div.textContent = `Team ${tn} → kart:${t.currentKartId||'-'} prev:${t.previousKartId||'-'} ${t.excluded?'[EXCL]':''}`;
-    tl.appendChild(div);
+    const d = document.createElement('div'); d.textContent = `Team ${tn} → kart:${t.currentKartId||'-'} prev:${t.previousKartId||'-'} ${t.excluded?'[EXCL]':''}`;
+    teamListEl.appendChild(d);
   });
 }
 
-function renderAll(){
-  renderLiveTable();
-  renderPit();
-  renderSidebar();
-}
+function renderAll(){ renderLiveTable(); renderPit(); renderSidebar(); }
 
-// ---------- Core: fetch -> parse -> integrate ----------
-async function fetchOnce(){
-  const url = document.getElementById('apexUrl').value.trim();
+// ---------- Fetch / Poll ----------
+async function doFetchOnce(){
+  const url = apexUrlInput.value && apexUrlInput.value.trim();
   if(!url){ setStatus('No Apex URL'); return; }
-  setStatus('Fetching Apex...');
-  const html = await proxyFetch(url);
-  if(!html){ setStatus('Fetch failed'); return; }
-  const rows = parseApexHtml(html);
-  if(rows.length === 0){ setStatus('Parsed no timing rows'); renderAll(); return; }
-  integrateLiveRows(rows);
-  setStatus(`Fetched ${rows.length} timing rows @ ${new Date().toLocaleTimeString()}`);
+  setStatus('Detecting Apex JSON / HTML...');
+  const detected = await detectJsonForUrl(url);
+  if(!detected || !detected.success){ setStatus('Detect failed'); console.warn(detected); return; }
+  setStatus(`Fetched from ${detected.source} (${detected.type})`);
+  const rows = extractRowsFromResponse(detected);
+  if(rows.length === 0){ setStatus('No rows parsed'); console.warn('no rows', detected); return; }
+  integrateRows(rows);
 }
 
-// ---------- Polling control ----------
 function startPolling(){
-  pollSeconds = Math.max(2, parseInt(document.getElementById('pollSeconds').value) || 5);
+  const s = Math.max(2, parseInt(pollSecondsInput.value) || 6);
   if(pollTimer) clearInterval(pollTimer);
-  pollTimer = setInterval(fetchOnce, pollSeconds * 1000);
-  document.getElementById('startBtn').disabled = true;
-  document.getElementById('stopBtn').disabled = false;
+  pollTimer = setInterval(doFetchOnce, s*1000);
+  startBtn.disabled = true; stopBtn.disabled = false;
   setStatus('Polling started');
-  fetchOnce();
+  doFetchOnce();
 }
-function stopPolling(){
-  if(pollTimer) clearInterval(pollTimer);
-  pollTimer = null;
-  document.getElementById('startBtn').disabled = false;
-  document.getElementById('stopBtn').disabled = true;
-  setStatus('Polling stopped');
-}
+function stopPolling(){ if(pollTimer) clearInterval(pollTimer); pollTimer = null; startBtn.disabled = false; stopBtn.disabled = true; setStatus('Polling stopped'); }
 
-// ---------- Export ----------
-function exportJSON(){
-  const data = { pitRows, karts, teams, liveTiming };
-  const blob = new Blob([JSON.stringify(data,null,2)], { type:'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = 'kart_tracker_export.json'; a.click();
-}
+// ---------- Export / utility ----------
+function exportJSON(){ const data = { pitRows, karts, teams, liveTiming }; const blob = new Blob([JSON.stringify(data,null,2)], { type:'application/json' }); const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url; a.download = 'kart-tracker-export.json'; a.click(); }
+function resetManualColors(){ Object.values(karts).forEach(k=>{ k.manualMode=false; k.manualScore=null; }); recomputeScoring(); renderAll(); }
 
-// ---------- Wiring ----------
-document.getElementById('setupBtn').onclick = ()=> setupPitRowsUI();
-document.getElementById('startBtn').onclick = ()=> startPolling();
-document.getElementById('stopBtn').onclick = ()=> stopPolling();
-document.getElementById('fetchOnceBtn').onclick = ()=> fetchOnce();
-document.getElementById('exportBtn').onclick = ()=> exportJSON();
-document.getElementById('resetColorsBtn').onclick = ()=> {
-  Object.values(karts).forEach(k => { k.manualMode = false; k.manualScore = null; });
-  recomputeScoring(); renderAll();
-};
-
-// ---------- Initial setup ----------
+// ---------- Init ----------
 window.addEventListener('load', ()=>{
+  numRowsInput.value = 3; kartsPerRowInput.value = 3;
   setupPitRowsUI();
-  renderAll();
-  setStatus('Ready. Configure rows and paste Apex link.');
+  setStatus('Ready. Paste ApexTiming link and Fetch Once / Start Polling.');
 });
+
